@@ -1,0 +1,31 @@
+{
+  "name": "inotebook",
+  "version": "1.0.0",
+  "description": "this is internet notebook, where you can store your upcoming event or works",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon index.js"
+  },
+  "keywords": [
+    "inotebook",
+    "internent",
+    "notebook",
+    "to",
+    "do",
+    "list",
+    "best",
+    "to",
+    "do",
+    "list"
+  ],
+  "author": "Ritesh Sharma",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "express-validator": "^6.15.0",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^6.9.2"
+  }
+}
