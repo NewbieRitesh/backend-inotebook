@@ -16,16 +16,17 @@ router.post('/createuser',
     body('email').isEmail(),
     body('password').isLength({ min: 6 })
   ], async (req, res) => {
+    // for validation errors
     const errors = validationResult(req);
     // checking is there is any error in this validation or not if yes then send errors to user
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ success: false, errors: errors.array() });
     }
     try {
       let user = await User.findOne({ email: req.body.email });
       // checking user is exists or not if yes then send error 
       if (user) {
-        return res.status(400).json({ error: "sorry this email is already regestered" })
+        return res.status(400).json({ success: false, error: "sorry this email is already regestered" })
       }
       //creating a user
       const salt = await bcrypt.genSalt(10)
@@ -35,21 +36,22 @@ router.post('/createuser',
         email: req.body.email,
         password: securePassword
       })
-      // res.json(user)
+      // generating JWT Token
       data = {
-        id: user.id
+        user: {
+          id: user.id
+        }
       }
       const authToken = jwt.sign(data, JWT_Token)
-      res.json({ authToken })
-      console.log(authToken);
+      res.status(200).json({ success: true, authToken })
     } catch (error) {
       console.error(error.message);
-      res.status(500).send('some error occured')
+      res.status(500).json({ success: false, error: "some error occured" })
     }
   }
 )
 
-// Router 2: Login          no login reqired
+// Route 2: Login          no login reqired
 router.post('/login',
   [
     body('email', 'Enter a valid Email').isEmail(),
@@ -58,32 +60,32 @@ router.post('/login',
     //if error occured, return a bad request and errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ errors: errors.errors });
     }
     const { email, password } = req.body;
     // check weather the user with this email is exist or not
     try {
-      let user = await User.findOne({ email: req.body.email });
+      let user = await User.findOne({ email: email });
+      console.log(user);
       if (!user) {
-        return res.status(400).json({ error: "Enter valid credentials" })
+        return res.status(400).json({ success: false, error: "Enter valid credentials" })
       }
 
       const passwordCompare = await bcrypt.compare(password, user.password)
       if (!passwordCompare) {
-        return res.status(400).json({ error: "Enter valid credentials" })
+        return res.status(400).json({ success: false, error: "Enter valid credentials" })
       }
-      // res.json(user)
       const data = {
         user: {
           id: user.id
         }
       }
       const authToken = jwt.sign(data, JWT_Token)
-      res.json({ authToken })
-      // console.log(authToken);
+      console.log(authToken);
+      res.json({ success: true, authToken })
     } catch (error) {
       console.error(error.message);
-      res.status(500).send('some error occured')
+      res.status(500).json({ success: false, error: "some error occured" })
     }
   }
 )
@@ -95,8 +97,79 @@ router.post('/getuser', fetchuser, async (req, res) => {
     const user = await User.findById(userId).select('-password');
     res.send(user)
   } catch (error) {
-    console.error(error.message)
-    res.status(500).send('some error occured')
+    console.error(error.message);
+    res.status(500).json({ success: false, error: "some error occured" })
   }
 })
+
+// Route 4: update user datails
+router.put('/update-user-data', fetchuser, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const userId = req.body.id;
+
+    let user = await User.findById(userId).select("-password")
+    console.log("this is user before update" + user)
+
+    user = await User.findOneAndUpdate(userId, { $set: { name } }, { returnOriginal: false })
+    console.log("this is user after update" + user)
+
+    res.json({ status: true, name })
+
+    console.log("This is name:" + name);
+    console.log("This is userID:" + userId)
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
+
+// Route: 5 authenticate user to update credentials
+router.post('/authenticate', fetchuser, async (req, res) => {
+  try {
+    const { password } = req.body
+    const userId = req.body.id
+    const user = await User.findById(userId)
+    console.log(user);
+
+    // comparing passwords
+    const comparePasswords = await bcrypt.compare(password, user.password)
+    if (comparePasswords) {
+      res.json({ success: true, comparePasswords })
+    }
+    else {
+      return res.status(400).json({ success: false, error: "Wrong Password" })
+    }
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
+
+// Route: 6 update user credentials
+router.put('/update-user-credintials', fetchuser, async (req, res) => {
+  try {
+    console.log(req.body);
+    const { email, password } = req.body
+    const userId = req.body.id;
+    let user = await User.findById(userId)
+
+    if (email) {
+      user = await User.findOneAndUpdate(userId, { $set: { email } }, { returnOriginal: false })
+      res.status(200).json({ success: true, email })
+    }
+    if (password) {
+      const newPlainPassword = password
+      const salt = await bcrypt.genSalt(10)
+      const newHashPassword = await bcrypt.hash(newPlainPassword, salt)
+      user = await User.findOneAndUpdate(userId, { $set: { password: newHashPassword } }, { returnOriginal: false })
+      res.status(200).json({ success: true })
+    }
+
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
+
 module.exports = router;
