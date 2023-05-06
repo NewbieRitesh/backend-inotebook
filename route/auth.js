@@ -103,21 +103,28 @@ router.post('/getuser', fetchuser, async (req, res) => {
 })
 
 // Route 4: update user datails
-router.put('/update-user-data', fetchuser, async (req, res) => {
+router.put('/update-user-data/:id', fetchuser, body('name', 'Name should be minimum 3 characters').isLength({ min: 3 }), async (req, res) => {
   try {
     const { name } = req.body;
-    const userId = req.body.id;
+    const userId = req.params.id;
+
+    // for validation errors
+    const errors = validationResult(req);
+    // checking is there is any error in this validation or not if yes then send errors to user
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
 
     let user = await User.findById(userId).select("-password")
     console.log("this is user before update" + user)
-
-    user = await User.findOneAndUpdate(userId, { $set: { name } }, { returnOriginal: false })
+    if (!user) {
+      return res.status(404).json({ success: false, error })
+    }
+    console.log(user);
+    user = await User.findByIdAndUpdate(userId, { $set: { name } }, { new: true })
     console.log("this is user after update" + user)
 
     res.json({ status: true, name })
-
-    console.log("This is name:" + name);
-    console.log("This is userID:" + userId)
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ success: false, error: "some error occured" })
@@ -125,10 +132,16 @@ router.put('/update-user-data', fetchuser, async (req, res) => {
 })
 
 // Route: 5 authenticate user to update credentials
-router.post('/authenticate', fetchuser, async (req, res) => {
+router.post('/authenticate/:id', fetchuser, [body('password', 'Enter a valid Password').isLength({ min: 6 })], async (req, res) => {
+  // for validation errors
+  const errors = validationResult(req);
+  // checking is there is any error in this validation or not if yes then send errors to user
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
   try {
     const { password } = req.body
-    const userId = req.body.id
+    const userId = req.params.id
     const user = await User.findById(userId)
     console.log(user);
 
@@ -147,29 +160,79 @@ router.post('/authenticate', fetchuser, async (req, res) => {
 })
 
 // Route: 6 update user credentials
-router.put('/update-user-credintials', fetchuser, async (req, res) => {
+router.post('/update-user-email/:id', fetchuser, async (req, res) => {
   try {
     console.log(req.body);
-    const { email, password } = req.body
-    const userId = req.body.id;
+    const { email, authPassword } = req.body
+    const userId = req.params.id;
     let user = await User.findById(userId)
-
-    if (email) {
-      user = await User.findOneAndUpdate(userId, { $set: { email } }, { returnOriginal: false })
-      res.status(200).json({ success: true, email })
+    console.log("old user obj", user)
+    if (user) {
+      const comparePasswords = await bcrypt.compare(authPassword, user.password)
+      if (comparePasswords === true) {
+        if (email) {
+          user = await User.findByIdAndUpdate(userId, { $set: { email } }, { new: true })
+          console.log("new user obj", user)
+          res.status(200).json({ success: true, email })
+        }
+      }
+      else {
+        res.status(400).json({ success: false, error: "invalid password" })
+      }
     }
-    if (password) {
-      const newPlainPassword = password
-      const salt = await bcrypt.genSalt(10)
-      const newHashPassword = await bcrypt.hash(newPlainPassword, salt)
-      user = await User.findOneAndUpdate(userId, { $set: { password: newHashPassword } }, { returnOriginal: false })
-      res.status(200).json({ success: true })
-    }
-
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ success: false, error: "some error occured" })
   }
 })
 
+router.put('/update-user-password/:id', fetchuser, async (req, res) => {
+  try {
+    console.log(req.body);
+    const { newPassword, authPassword } = req.body
+    const userId = req.params.id;
+    let user = await User.findById(userId)
+    console.log("old user obj", user)
+    if (user) {
+      const comparePasswords = await bcrypt.compare(authPassword, user.password)
+      if (comparePasswords === true) {
+        if (newPassword) {
+          const newPlainPassword = newPassword
+          const salt = await bcrypt.genSalt(10)
+          const newHashPassword = await bcrypt.hash(newPlainPassword, salt)
+          user = await User.findByIdAndUpdate(userId, { $set: { password: newHashPassword } }, { new: true })
+          console.log(user);
+          res.status(200).json({ success: true, response: "password changed successfully" })
+        }
+      }
+      else {
+        res.status(400).json({ success: false, error: "invalid password" })
+      }
+    }
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
+router.delete('/delete-user/:id', fetchuser, async (req, res) => {
+  try {
+    const { authPassword } = req.body;
+    const userId = req.params.id
+    const user = await User.findById(userId)
+    if (user) {
+      const comparePasswords = await bcrypt.compare(authPassword, user.password)
+      if (comparePasswords === true) {
+        const deletedUser = await User.findByIdAndDelete(userId)
+        console.log(deletedUser)
+        res.status(200).json({ success: true, deletedUser })
+      }
+      else {
+        res.status(400).json({ success: false, error: "invalid password" })
+      }
+    }
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
 module.exports = router;

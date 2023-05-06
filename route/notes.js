@@ -39,8 +39,17 @@ router.post('/addnote', fetchuser, [
 })
 
 // Route 3: Update notes       login reqired
-router.put('/updatenote/:id', fetchuser, async (req, res) => {
+router.put('/updatenote/:id', fetchuser, [
+    body('title', 'Enter title minimum lenth of 3 characters').isLength({ min: 3 }),
+    body('description', 'Enter description with minimum 3 characters').isLength({ min: 3 }),
+], async (req, res) => {
     const { title, description, tag } = req.body;
+    // for validation errors
+    const errors = validationResult(req);
+    // checking is there is any error in this validation or not if yes then send errors to user
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
     //create a new note object
     try {
         const newNote = {};
@@ -53,6 +62,7 @@ router.put('/updatenote/:id', fetchuser, async (req, res) => {
         if (!note) {
             return res.status(404).send("Note not found")
         }
+
         if (note.user.toString() !== req.user.id) {
             return res.status(401).send("Unauthorised Access")
         }
