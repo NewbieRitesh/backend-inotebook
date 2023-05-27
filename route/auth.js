@@ -16,14 +16,12 @@ router.post('/createuser', [
   body('password', 'password should contain at least 6 characters').isLength({ min: 6 })
 ], async (req, res) => {
   try {
-    // for validation errors
-    const errors = validationResult(req);
     // if validation occur error then send bad request
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array() });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array()[0].msg });
 
-    // check user with entered email is exists or not
+    // check user with entered email is exists or not, if user exists then send bad request 
     let user = await User.findOne({ email: req.body.email });
-    // if user exists then send bad request 
     if (user) return res.status(400).json({ success: false, response: "sorry this email is already regestered" })
 
     // creating a user
@@ -40,7 +38,7 @@ router.post('/createuser', [
     // generating JWT Token and sending authtoken as response
     data = { user: { id: user.id } }
     const authToken = jwt.sign(data, JWT_Token)
-    res.status(200).json({ success: true, authToken })
+    res.status(200).json({ success: true, response: "sign up successful", authToken })
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ success: false, response: "Internal Server Error" })
@@ -53,26 +51,23 @@ router.post('/login', [
   body('password', 'password should contain at least 6 characters').isLength({ min: 6 })
 ], async (req, res) => {
   try {
-    // for validation errors
-    const errors = validationResult(req);
     // if validation occur error then send bad request
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array()[0].msg });
 
-    // check the user with email exists or not
+    // check the user with email exists or not, if user don't exists then send bad request
     const { email, password } = req.body;
     let user = await User.findOne({ email: email });
-    // if user don't exists then send bad request
     if (!user) return res.status(400).json({ success: false, response: "Enter valid credentials" })
 
-    // comparing password
-    const passwordCompare = await bcrypt.compare(password, user.password)
     // if entered password does not match then send bad request
+    const passwordCompare = await bcrypt.compare(password, user.password)
     if (!passwordCompare) return res.status(400).json({ success: false, response: "Enter valid credentials" })
 
     // generating JWT token and sending as response
     const data = { user: { id: user.id } }
     const authToken = jwt.sign(data, JWT_Token)
-    res.json({ success: true, authToken })
+    res.json({ success: true, response: "login successful", authToken })
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ success: false, response: "some error occured" })
@@ -95,25 +90,25 @@ router.post('/getuser', fetchuser, async (req, res) => {
 })
 
 // Route 4: to update user data except credentials 
-router.put('/update-user-data/:id', fetchuser, body('name', 'Name should be minimum 3 characters').isLength({ min: 3 }), async (req, res) => {
+router.put('/update-user-data/:id', fetchuser, [
+  body('name', 'Name should be minimum 3 characters').isLength({ min: 3 })
+], async (req, res) => {
   try {
-    // for validation errors
-    const errors = validationResult(req);
     // if validation errors then send bad request with errors
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array() });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array()[0].msg });
 
     // declaraing variables
     const { name } = req.body;
     const userId = req.params.id;
 
-    // checking user exists or not 
-    let user = await User.findById(userId).select("-password")
     // if user not exists then send bad request
+    let user = await User.findById(userId).select("-password")
     if (!user) return res.status(404).json({ success: false, response: "User doesn't exists" })
 
     // if user exists then update user data (name) and send response
     user = await User.findByIdAndUpdate(userId, { $set: { name } }, { new: true })
-    res.status(200).json({ status: true, response: "User data updated successfully", name })
+    res.status(200).json({ success: true, response: "User data updated successfully", name })
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ success: false, response: "some error occured" })
@@ -122,23 +117,19 @@ router.put('/update-user-data/:id', fetchuser, body('name', 'Name should be mini
 
 // Route: 5 to authenticate user to update credentials
 router.post('/authenticate/:id', fetchuser, [
-  body('password', 'Enter a valid Password').isLength({ min: 6 }),
-
+  body('password', 'Enter a valid Password').isLength({ min: 6 })
 ], async (req, res) => {
   try {
-    // for validation errors
-    const errors = validationResult(req);
     // if errors then send bad request
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array() });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array()[0].msg });
 
-    // checking user exists or not
-    const user = await User.findById(req.params.id)
     // if user not exists then send bad request
+    const user = await User.findById(req.params.id)
     if (!user) return res.status(400).json({ success: false, response: "Enter valid credentials" })
 
-    // comparing passwords
-    const comparePasswords = await bcrypt.compare(req.body.password, user.password)
     // if password match then send response else send bad request
+    const comparePasswords = await bcrypt.compare(req.body.password, user.password)
     if (comparePasswords) res.json({ success: true, response: "Authenticated Successfully", comparePasswords })
     else return res.status(400).json({ success: false, response: "Wrong Password" })
   } catch (error) {
@@ -153,26 +144,25 @@ router.put('/update-user-email/:id', fetchuser, [
   body('authPassword', 'password should contain at least 6 characters').isLength({ min: 6 })
 ], async (req, res) => {
   try {
-    // for validation errors
-    const errors = validationResult(req);
     // if validation occur error then send bad request
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array()[0].msg });
 
     // distructuring variables 
     const { email, authPassword } = req.body
     const userId = req.params.id;
 
-    // finding user exists or not
-    let user = await User.findById(userId)
     // if user not exist then send bad request
+    let user = await User.findById(userId)
     if (!user) return res.status(400).json({ success: false, response: "Enter valid credentials" })
     // if user exists then compare password
     if (user) {
-      const comparePasswords = await bcrypt.compare(authPassword, user.password)
       // if true then update email and send response else send bad request
+      const comparePasswords = await bcrypt.compare(authPassword, user.password)
       if (comparePasswords === true) {
+        let userNewEmail = await User.findOne({ email: email });
+        if (userNewEmail) return res.status(400).json({ success: false, response: "sorry this email is already regestered" })
         user = await User.findByIdAndUpdate(userId, { $set: { email } }, { new: true })
-        console.log("new user obj", user)
         res.status(200).json({ success: true, response: "Email updated successfully", email })
       } else res.status(400).json({ success: false, response: "invalid password" })
     }
@@ -188,28 +178,28 @@ router.put('/update-user-password/:id', fetchuser, [
   body('authPassword', 'password should contain at least 6 characters').isLength({ min: 6 })
 ], async (req, res) => {
   try {
-    // for validation errors
-    const errors = validationResult(req);
     // if validation occur error then send bad request
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, response: errors.array()[0].msg });
 
     // destructuing variables
     const { newPassword, authPassword } = req.body
     const userId = req.params.id;
 
-    // checking user exist or not
-    let user = await User.findById(userId)
     // if user not exist then send bad request
+    let user = await User.findById(userId)
     if (!user) return res.status(400).json({ success: false, response: "user not exists" })
     // if exists then compare password 
     if (user) {
-      const comparePasswords = await bcrypt.compare(authPassword, user.password)
       // if password match then update password with new hash and send response
+      const comparePasswords = await bcrypt.compare(authPassword, user.password)
       if (comparePasswords === true) {
-        const salt = await bcrypt.genSalt(10)
-        const newHashPassword = await bcrypt.hash(newPassword, salt)
-        user = await User.findByIdAndUpdate(userId, { $set: { password: newHashPassword } }, { new: true })
-        res.status(200).json({ success: true, response: "password changed successfully" })
+        if (authPassword !== newPassword) {
+          const salt = await bcrypt.genSalt(10)
+          const newHashPassword = await bcrypt.hash(newPassword, salt)
+          user = await User.findByIdAndUpdate(userId, { $set: { password: newHashPassword } }, { new: true })
+          res.status(200).json({ success: true, response: "password changed successfully" })
+        } else res.json({ success: false, response: "Password cann't same as previous password" })
       } else res.status(400).json({ success: false, response: "invalid password" })
     }
   } catch (error) {
@@ -219,17 +209,19 @@ router.put('/update-user-password/:id', fetchuser, [
 })
 
 // Route 8: to delete user
-router.delete('/delete-user/:id', fetchuser, async (req, res) => {
+router.delete('/delete-user/:id', fetchuser, [
+  body('password', 'Enter a valid Password').isLength({ min: 6 })
+], async (req, res) => {
   try {
-    const userId = req.params.id
-    // checking user exists or not 
-    const user = await User.findById(userId)
     // if user not exist then send bad request
+    const userId = req.params.id
+    const user = await User.findById(userId)
     if (!user) return res.status(400).json({ success: false, response: "user not exists" })
+
     // if user exists then compare password
     if (user) {
-      const comparePasswords = await bcrypt.compare(req.body.authPassword, user.password)
       // if password match then delete user and send response
+      const comparePasswords = await bcrypt.compare(req.body.authPassword, user.password)
       if (comparePasswords === true) {
         const deletedUser = await User.findByIdAndDelete(userId)
         res.status(200).json({ success: true, response: "User deleted successfully", deletedUser })
