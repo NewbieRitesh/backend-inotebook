@@ -5,9 +5,10 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fetchuser = require('../middleware/fetchuser');
+const nodemailer = require('nodemailer');
+const OTP = require('../modules/OTP');
 
-const JWT_Token = 'King';
-
+const JWT_Token = process.env.JWT_TOKEN
 
 // Route 1: to create user
 router.post('/createuser', [
@@ -232,4 +233,101 @@ router.delete('/delete-user/:id', fetchuser, [
     res.status(500).json({ success: false, error: "some error occured" })
   }
 })
+
+// Route 9: to forgot password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // if user not exist then send bad request
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ success: false, response: "User not found" })
+
+    // generating otp
+    const digits = '0123456789';
+    let otp = '';
+    for (let i = 0; i < 6; i++) {
+      otp += digits[Math.floor(Math.random() * 10)];
+    }
+
+    // creating nodemailer transporter object
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL,
+        pass: process.env.PASS
+      }
+    })
+
+    // configure email message
+    const mailOptions = {
+      from: process.env.EMAIL,
+      to: user.email,
+      subject: "iNotebook password reset otp",
+      text: `this mail is from iNotebook web app \n you can reset your password using given otp \n OTP: ${otp}`
+    }
+
+    // send email
+    let data = await transporter.sendMail(mailOptions);
+    // store email and otp to database
+    if (!data) return res.status(500).json({ success: false, error: "some error occured" })
+    let otpDB = await OTP.findOne({ email })
+    if (otpDB) otpDB = await OTP.findByIdAndDelete(otpDB._id)
+    otpDB = await OTP.create({
+      email,
+      otp,
+      otpValidation: false
+    })
+    res.json({ success: true, response: "OTP has been sent to your email" })
+  } catch (error) {
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
+
+// Route 10: to verify otp
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, userOTP } = req.body;
+    const user = await User.findOne({ email })
+    let dbOTP = await OTP.findOne({ email })
+
+    // if user and otp not found then send bad request
+    if (!user) return res.status(404).json({ success: false, response: "User not found" })
+    if (!dbOTP) return res.status(404).json({ success: false, response: "Session Expired" })
+
+    if (dbOTP.otp === parseInt(userOTP)) {
+      dbOTP = await OTP.findOneAndUpdate({ email }, { $set: { otpValidation: true } }, { new: true })
+      if (dbOTP.otpValidation === true) return res.json({ success: true, response: "OTP Verified" })
+      else return res.json({ success: false, response: "Some error occur" })
+    } else return res.json({ success: false, response: "wrong otp" })
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
+
+router.put('/forgot-update-password', async (req, res) => {
+  try {
+    const { newPassword, email } = req.body;
+    const dbOTP = await OTP.findOne({ email });
+    let user = await User.findOne({ email });
+
+    // if user and otp not found
+    if (!user) return res.status(400).json({ success: false, response: "User not found" })
+    if (!dbOTP) return res.status(400).json({ success: false, response: "Session Expired" })
+
+    if (dbOTP.otpValidation && user.email === dbOTP.email) {
+      const myPlainPassword = newPassword;
+      const salt = await bcrypt.genSalt(10);
+      const newHashPassword = await bcrypt.hash(myPlainPassword, salt);
+      user = await User.findOneAndUpdate(user._id, { $set: { password: newHashPassword } }, { new: true })
+      await OTP.findOneAndDelete({ email })
+      return res.status(200).json({ success: true, response: "Password updated Successfully" })
+    } else return res.status(400).json({ success: false, response: "Some error occured" })
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: "some error occured" })
+  }
+})
+
 module.exports = router;
