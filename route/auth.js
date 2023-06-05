@@ -33,13 +33,14 @@ router.post('/createuser', [
     user = await User.create({
       name: req.body.name,
       email: req.body.email,
-      password: securePassword
+      password: securePassword,
+      lastPasswordChange: Date(),
     })
 
     // generating JWT Token and sending authtoken as response
     data = { user: { id: user.id } }
     const authToken = jwt.sign(data, JWT_Token)
-    res.status(200).json({ success: true, response: "sign up successful", authToken })
+    res.status(200).json({ success: true, response: "account created successfully", authToken })
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ success: false, response: "Internal Server Error" })
@@ -198,7 +199,7 @@ router.put('/update-user-password/:id', fetchuser, [
         if (authPassword !== newPassword) {
           const salt = await bcrypt.genSalt(10)
           const newHashPassword = await bcrypt.hash(newPassword, salt)
-          user = await User.findByIdAndUpdate(userId, { $set: { password: newHashPassword } }, { new: true })
+          user = await User.findByIdAndUpdate(userId, { $set: { password: newHashPassword, lastPasswordChange: Date() } }, { new: true })
           res.status(200).json({ success: true, response: "password changed successfully" })
         } else res.json({ success: false, response: "Password cann't same as previous password" })
       } else res.status(400).json({ success: false, response: "invalid password" })
@@ -275,8 +276,7 @@ router.post('/forgot-password', async (req, res) => {
     if (otpDB) otpDB = await OTP.findByIdAndDelete(otpDB._id)
     otpDB = await OTP.create({
       email,
-      otp,
-      otpValidation: false
+      otp
     })
     res.json({ success: true, response: "OTP has been sent to your email" })
   } catch (error) {
@@ -296,9 +296,7 @@ router.post('/verify-otp', async (req, res) => {
     if (!dbOTP) return res.status(404).json({ success: false, response: "Session Expired" })
 
     if (dbOTP.otp === parseInt(userOTP)) {
-      dbOTP = await OTP.findOneAndUpdate({ email }, { $set: { otpValidation: true } }, { new: true })
-      if (dbOTP.otpValidation === true) return res.json({ success: true, response: "OTP Verified" })
-      else return res.json({ success: false, response: "Some error occur" })
+      return res.json({ success: true, response: "OTP Verified" })
     } else return res.json({ success: false, response: "wrong otp" })
 
   } catch (error) {
@@ -306,24 +304,27 @@ router.post('/verify-otp', async (req, res) => {
   }
 })
 
+// Route 11: to update password by otp
 router.put('/forgot-update-password', async (req, res) => {
   try {
-    const { newPassword, email } = req.body;
+    const { userOTP, newPassword, email } = req.body;
     const dbOTP = await OTP.findOne({ email });
     let user = await User.findOne({ email });
-
+    console.log(req.body);
     // if user and otp not found
     if (!user) return res.status(400).json({ success: false, response: "User not found" })
     if (!dbOTP) return res.status(400).json({ success: false, response: "Session Expired" })
 
-    if (dbOTP.otpValidation && user.email === dbOTP.email) {
+    console.log(dbOTP);
+    console.log(user);
+    if (dbOTP.otp === parseInt(userOTP) && user.email === dbOTP.email) {
       const myPlainPassword = newPassword;
       const salt = await bcrypt.genSalt(10);
       const newHashPassword = await bcrypt.hash(myPlainPassword, salt);
-      user = await User.findOneAndUpdate(user._id, { $set: { password: newHashPassword } }, { new: true })
+      user = await User.findOneAndUpdate(user._id, { $set: { password: newHashPassword, lastPasswordChange: Date() } }, { new: true })
       await OTP.findOneAndDelete({ email })
       return res.status(200).json({ success: true, response: "Password updated Successfully" })
-    } else return res.status(400).json({ success: false, response: "Some error occured" })
+    } else return res.status(400).json({ success: false, response: "some error occured" })
 
   } catch (error) {
     res.status(500).json({ success: false, error: "some error occured" })

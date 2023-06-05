@@ -11,9 +11,6 @@ const OTPSchema = new Schema({
         type: Number,
         required: true
     },
-    otpValidation: {
-        type: Boolean
-    },
     createdAT: {
         type: Date,
         default: Date.now,
